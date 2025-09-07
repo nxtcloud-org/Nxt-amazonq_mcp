@@ -3,69 +3,57 @@ import boto3
 from botocore.exceptions import ClientError
 
 # --- 페이지 설정 ---
-st.set_page_config(layout="wide", page_title="AI 이메일 작성기", page_icon="📧")
+st.set_page_config(layout="wide", page_title="AI 논문 초록 생성기", page_icon="✍️")
 
 # --- 앱 제목 ---
-st.title("📧 AI 정중한 이메일 초안 작성기 ✍️")
-st.subheader("몇 가지 정보만 입력하면 AI가 격식에 맞는 이메일을 완성해 드려요.")
+st.title("✍️ AI 논문 초록 생성기 📄")
+st.subheader(
+    "머릿속 아이디어를 던져주시면, AI가 그럴듯한 논문 초록으로 다듬어 드립니다."
+)
 st.write("---")
 
 # --- 입력 폼과 결과를 두 개의 컬럼으로 구성 ---
 col1, col2 = st.columns(2)
 
 with col1:
-    # --- 구조화된 입력 섹션 ---
-    st.write("####  STEP 1: 이메일 정보 입력")
-    recipient = st.text_input(
-        "**받는 사람** (예: 김민준 교수님, 인사팀장님)", "김민준 교수님"
+    # --- 구조화된 입력 섹션 (더 캐주얼한 예시로 변경) ---
+    st.write("####  STEP 1: 연구 아이디어 입력")
+    research_topic = st.text_input("**연구 주제**", "대학생 과제와 생성형 AI")
+
+    research_background = st.text_area(
+        "**연구 배경 및 목적** (이 연구를 왜, 무엇을 위해 하나요?)",
+        "요즘 대학생들 과제할 때 챗GPT 같은 AI를 많이 씀. 이게 과연 좋은 걸까? 과제 퀄리티에 어떤 영향을 주는지 궁금함.",
+        height=150,
     )
 
-    purpose_options = {
-        "과제 기한 연장 요청": "assignment_extension",
-        "강의 내용 질문": "lecture_question",
-        "면담 요청": "meeting_request",
-        "감사 인사": "thank_you",
-        "가벼운 안부 인사": "casual_greeting",
-    }
-    purpose_label = st.selectbox(
-        "**이메일 목적**", options=list(purpose_options.keys())
+    methodology = st.text_area(
+        "**연구 방법** (어떻게 연구를 진행할 건가요?)",
+        "두 그룹으로 나눠서 비교 실험. A그룹은 AI 사용, B그룹은 AI 미사용. 과제 결과물 점수 매기고, 설문조사도 진행.",
+        height=150,
     )
 
-    tone_options = {
-        "매우 정중하게 (격식체)": "very_formal",
-        "친절하고 부드럽게": "friendly_formal",
-        "간결하고 핵심만": "concise",
-    }
-    tone_label = st.radio(
-        "**원하는 어조**", options=list(tone_options.keys()), horizontal=True
-    )
-
-    core_message = st.text_area(
-        "**핵심 내용** (AI가 이 내용을 바탕으로 문장을 다듬습니다)",
-        "안녕하세요, 교수님. 다름이 아니라 이번 주 과제 제출 기한을 하루만 연장해주실 수 있는지 정중히 여쭙고 싶습니다. 개인적인 사정으로 인해 부득이하게 요청드립니다.",
+    key_results = st.text_area(
+        "**핵심 결과 또는 예상 결과** (무엇을 발견할 것으로 기대하나요?)",
+        "AI 쓴 쪽이 과제는 빨리 끝낼 듯. 근데 내용은 다 비슷비슷하고 창의성은 떨어질 것 같음. 결국 AI를 잘 쓰는 법을 가르쳐야 한다는 결론이 나올 듯.",
         height=150,
     )
 
 
 # --- Bedrock 클라이언트 생성 함수 ---
-# 캐싱을 사용하여 클라이언트 객체를 재사용함으로써 성능을 향상시킵니다.
 @st.cache_resource
 def get_bedrock_client():
-    # Bedrock 클라이언트를 us-east-1 리전으로 생성합니다.
-    # Nova 모델은 현재 해당 리전에서 사용 가능합니다.
     client = boto3.client("bedrock-runtime", region_name="us-east-1")
     return client
 
 
 # --- 스트리밍 응답을 처리하는 생성기 함수 ---
-def generate_email_response(prompt):
+def generate_abstract_response(prompt):
     """
     Bedrock API를 호출하고 스트리밍 응답의 텍스트 청크를 반환하는 생성기 함수.
     """
     client = get_bedrock_client()
     model_id = "amazon.nova-lite-v1:0"
 
-    # Bedrock Converse API가 요구하는 대화 형식으로 메시지를 구성합니다.
     conversation = [
         {
             "role": "user",
@@ -74,61 +62,60 @@ def generate_email_response(prompt):
     ]
 
     try:
-        # 스트리밍 방식으로 Bedrock API를 호출합니다.
         streaming_response = client.converse_stream(
             modelId=model_id,
             messages=conversation,
-            inferenceConfig={"maxTokens": 1024, "temperature": 0.7, "topP": 0.9},
+            inferenceConfig={"maxTokens": 4096, "temperature": 0.7, "topP": 0.9},
         )
 
-        # 스트림에서 텍스트 청크를 추출하여 반환(yield)합니다.
         for chunk in streaming_response["stream"]:
             if "contentBlockDelta" in chunk:
                 yield chunk["contentBlockDelta"]["delta"]["text"]
 
     except ClientError as e:
-        # AWS 클라이언트 오류 처리
         st.error(f"AWS 오류가 발생했습니다: {e.response['Error']['Message']}")
     except Exception as e:
-        # 기타 예외 처리
         st.error(f"오류가 발생했습니다: {e}")
 
 
 with col2:
     # --- 결과 출력 섹션 ---
-    st.write("#### STEP 2: AI가 생성한 이메일 확인")
+    st.write("#### STEP 2: AI가 생성한 논문 초록 확인")
 
-    if st.button("✨ 이메일 생성하기", type="primary"):
-        if not all([recipient, purpose_label, tone_label, core_message]):
+    if st.button("✨ 초록 생성하기", type="primary"):
+        if not all([research_topic, research_background, methodology, key_results]):
             st.error("❌ 모든 필드를 입력해 주세요!")
         else:
-            # --- AI 프롬프트 자동 생성 ---
+            # --- AI 프롬프트 자동 생성 (강화된 버전) ---
             prompt = f"""
-            '{recipient}'에게 보내는 이메일 초안을 작성해 줘.
-            이메일의 목적은 '{purpose_label}'이야.
-            전체적인 톤은 '{tone_label}' 스타일로 맞춰 줘.
-            아래 핵심 내용을 바탕으로 자연스럽고 격식 있는 문장으로 완성해 줘.
+            당신은 간결하고 비공식적인 아이디어를 공식적이고 구조적인 학술 초록으로 발전시키는 데 능숙한 전문 학술 작가입니다.
+            사용자가 제공하는 핵심 아이디어를 바탕으로, 논리적 흐름에 맞게 살을 붙이고 전문적인 학술 용어를 사용하여 국문 논문 초록(Abstract)을 작성해 주세요.
+            입력값이 매우 캐주얼하더라도, 최종 결과물은 전문적이고 학술적인 어조를 반드시 유지해야 합니다.
+            초록은 표준적인 학술 구조(연구 배경 및 목적, 연구 방법, 예상 결과, 시사점)가 자연스럽게 드러나도록 논리적으로 구성해야 합니다.
+
+            [입력 정보]
+            - 연구 주제: {research_topic}
+            - 연구 배경 및 목적에 대한 아이디어: {research_background}
+            - 연구 방법에 대한 아이디어: {methodology}
+            - 핵심 결과 또는 예상 결과에 대한 아이디어: {key_results}
             
-            [핵심 내용]
-            {core_message}
-            
-            결과는 '제목:'과 '본문:'으로 명확히 구분해서 보여줘.
+            위 아이디어들을 종합하여 약 200-250 단어 내외의 짜임새 있는 한 편의 완결된 글로 초록을 생성해 주세요.
+            결과는 제목 없이 초록 내용만 바로 보여주세요.
             """
 
             # --- Bedrock API 호출 및 실시간 출력 ---
-            st.info("🤖 AI가 이메일을 실시간으로 생성하고 있습니다...")
-            st.write("##### 📧 생성된 이메일 초안")
+            st.info("🤖 AI가 아이디어를 논문 초록으로 다듬고 있습니다...")
+            st.write("##### 📄 생성된 논문 초록")
 
-            # st.write_stream을 사용하여 스트리밍 응답을 화면에 실시간으로 표시
             response_placeholder = st.empty()
             full_response = response_placeholder.write_stream(
-                generate_email_response(prompt)
+                generate_abstract_response(prompt)
             )
 
 # --- 하단 정보 박스 ---
 st.write("---")
 st.info(
     """
-    💡 **AI 모델을 활용한 서비스**는 사용자가 복잡한 프롬프트를 고민할 필요 없이, **정해진 절차에 따라 최고의 결과물을 얻도록 돕는 것**이 핵심입니다.
+    💡 **연구 아이디어를 빠르게 초록으로 구체화**하여 동료나 지도교수님과 논의를 시작해 보세요. 연구의 방향성을 잡고 발전시키는 데 큰 도움이 될 것입니다.
     """
 )
