@@ -95,7 +95,7 @@ streamlit run app.py
 ### AI 모델 설정
 
 - **모델**: amazon.nova-lite-v1:0
-- **최대 토큰**: 1024
+- **최대 토큰**: 4096
 - **Temperature**: 0.7
 - **Top P**: 0.9
 
