@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>병원 영양소 게임</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      font-family: Arial, sans-serif;
+      text-align: center;
+      min-height: 100vh;
+    }
+    
+    #patient-selection {
+      padding: 20px;
+    }
+    
+    .patient-card {
+      display: inline-block;
+      margin: 10px;
+      padding: 20px;
+      background: rgba(255,255,255,0.1);
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.3s;
+      border: 2px solid transparent;
+    }
+    
+    .patient-card:hover {
+      background: rgba(255,255,255,0.2);
+      border-color: #4caf50;
+    }
+    
+    .patient-card.selected {
+      border-color: #4caf50;
+      background: rgba(76,175,80,0.2);
+    }
+    
+    #game {
+      position: relative;
+      width: 400px;
+      height: 600px;
+      margin: 30px auto;
+      border: 2px solid white;
+      background: #222;
+      overflow: hidden;
+      display: none;
+    }
+    
+    #player {
+      position: absolute;
+      bottom: 10px;
+      width: 30px;
+      height: 30px;
+      background: #4caf50;
+      left: 0;
+      border-radius: 50%;
+    }
+    
+    .nutrition-item {
+      position: absolute;
+      width: 50px;
+      height: 50px;
+      top: 0;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      font-weight: bold;
+      background: rgba(255, 255, 255, 0.9);
+      border: 2px solid #333;
+    }
+    
+    #info {
+      margin-top: 10px;
+      font-size: 18px;
+      display: none;
+    }
+    
+    #patient-info {
+      margin: 10px 0;
+      padding: 10px;
+      background: rgba(255,255,255,0.1);
+      border-radius: 5px;
+      display: none;
+    }
+    
+    .life-heart {
+      color: #f44336;
+      font-size: 20px;
+    }
+  </style>
+</head>
+<body>
+  <h1>🏥 병원 영양소 게임</h1>
+  
+  <div id="patient-selection">
+    <h2>환자를 선택하세요</h2>
+    <div class="patient-card" data-patient="diabetes">
+      <h3>🍎 당뇨병 환자</h3>
+      <p>저당분 식품을 먹고<br>고당분 식품을 피하세요</p>
+    </div>
+    <div class="patient-card" data-patient="hypertension">
+      <h3>💓 고혈압 환자</h3>
+      <p>저염분 식품을 먹고<br>고염분 식품을 피하세요</p>
+    </div>
+    <div class="patient-card" data-patient="obesity">
+      <h3>⚖️ 비만 환자</h3>
+      <p>저칼로리 식품을 먹고<br>고칼로리 식품을 피하세요</p>
+    </div>
+    <button id="start-game" style="display:none; margin-top:20px; padding:10px 20px; font-size:16px; background:#4caf50; color:white; border:none; border-radius:5px; cursor:pointer;">게임 시작</button>
+  </div>
+  
+  <div id="patient-info">
+    <h3 id="selected-patient-name"></h3>
+    <p id="patient-instructions"></p>
+  </div>
+  
+  <div id="game">
+    <div id="player"></div>
+  </div>
+  
+  <div id="info">
+    <div class="life-heart">❤️ 생명: <span id="lives">2</span></div>
+    <div>🧮 점수: <span id="score">0</span> | ⏱️ 시간: <span id="time">0</span>초</div>
+  </div>
+
+  <script>
+    // 게임 상태
+    let selectedPatient = null;
+    let gameStarted = false;
+    let gameOver = false;
+    let lives = 2;
+    let score = 0;
+    let time = 0;
+    let playerX = 0;
+    let moveLeft = false;
+    let moveRight = false;
+
+    // 환자별 영양소 데이터
+    const patientData = {
+      diabetes: {
+        name: "🍎 당뇨병 환자",
+        instructions: "저당분 식품(🥬🍅🥒🥕🥦)을 먹고, 고당분 식품(🍰🍭🍫🍪🍩)을 피하세요!",
+        good: ["🥬", "🍅", "🥒", "🥕", "🥦"],
+        bad: ["🍰", "🍭", "🍫", "🍪", "🍩"]
+      },
+      hypertension: {
+        name: "💓 고혈압 환자", 
+        instructions: "저염분 식품(🥬🍅🥒🥕🥦)을 먹고, 고염분 식품(🍟🍕🥓🍖🧀)을 피하세요!",
+        good: ["🥬", "🍅", "🥒", "🥕", "🥦"],
+        bad: ["🍟", "🍕", "🥓", "🍖", "🧀"]
+      },
+      obesity: {
+        name: "⚖️ 비만 환자",
+        instructions: "저칼로리 식품(🥬🍅🥒🥕🥦)을 먹고, 고칼로리 식품(🍔🍟🍕🍰🍫)을 피하세요!",
+        good: ["🥬", "🍅", "🥒", "🥕", "🥦"],
+        bad: ["🍔", "🍟", "🍕", "🍰", "🍫"]
+      }
+    };
+
+    // DOM 요소들
+    const patientSelection = document.getElementById("patient-selection");
+    const patientInfo = document.getElementById("patient-info");
+    const game = document.getElementById("game");
+    const player = document.getElementById("player");
+    const startButton = document.getElementById("start-game");
+    const selectedPatientName = document.getElementById("selected-patient-name");
+    const patientInstructions = document.getElementById("patient-instructions");
+    const livesEl = document.getElementById("lives");
+    const scoreEl = document.getElementById("score");
+    const timeEl = document.getElementById("time");
+    const info = document.getElementById("info");
+
+    // 환자 선택 이벤트
+    document.querySelectorAll('.patient-card').forEach(card => {
+      card.addEventListener('click', () => {
+        // 기존 선택 해제
+        document.querySelectorAll('.patient-card').forEach(c => c.classList.remove('selected'));
+        
+        // 새 선택
+        card.classList.add('selected');
+        selectedPatient = card.dataset.patient;
+        
+        // 환자 정보 표시
+        const data = patientData[selectedPatient];
+        selectedPatientName.textContent = data.name;
+        patientInstructions.textContent = data.instructions;
+        patientInfo.style.display = 'block';
+        startButton.style.display = 'block';
+      });
+    });
+
+    // 게임 시작
+    startButton.addEventListener('click', () => {
+      patientSelection.style.display = 'none';
+      patientInfo.style.display = 'none';
+      game.style.display = 'block';
+      info.style.display = 'block';
+      gameStarted = true;
+      
+      // 플레이어 초기 위치
+      playerX = (game.clientWidth - player.offsetWidth) / 2;
+      player.style.left = playerX + "px";
+      
+      startGame();
+    });
+
+    // 키보드 이벤트
+    document.addEventListener("keydown", (e) => {
+      if (!gameStarted || gameOver) return;
+      if (e.key === "ArrowLeft") moveLeft = true;
+      if (e.key === "ArrowRight") moveRight = true;
+    });
+
+    document.addEventListener("keyup", (e) => {
+      if (!gameStarted || gameOver) return;
+      if (e.key === "ArrowLeft") moveLeft = false;
+      if (e.key === "ArrowRight") moveRight = false;
+    });
+
+    function movePlayer() {
+      if (moveLeft) playerX -= 5;
+      if (moveRight) playerX += 5;
+
+      const maxX = game.clientWidth - player.offsetWidth;
+      playerX = Math.max(0, Math.min(maxX, playerX));
+      player.style.left = playerX + "px";
+    }
+
+    function createNutritionItem() {
+      const item = document.createElement("div");
+      item.classList.add("nutrition-item");
+      
+      const data = patientData[selectedPatient];
+      const isGood = Math.random() < 0.6; // 60% 확률로 좋은 영양소
+      const items = isGood ? data.good : data.bad;
+      const randomItem = items[Math.floor(Math.random() * items.length)];
+      
+      item.textContent = randomItem;
+      item.dataset.type = isGood ? "good" : "bad";
+      
+      item.style.left = Math.floor(Math.random() * (game.clientWidth - 50)) + "px";
+      game.appendChild(item);
+
+      let itemY = 0;
+      const fall = setInterval(() => {
+        if (gameOver) {
+          clearInterval(fall);
+          item.remove();
+          return;
+        }
+
+        itemY += 2;
+        item.style.top = itemY + "px";
+
+        const itemRect = item.getBoundingClientRect();
+        const playerRect = player.getBoundingClientRect();
+
+        // 충돌 검사
+        if (
+          itemRect.bottom >= playerRect.top &&
+          itemRect.top <= playerRect.bottom &&
+          itemRect.left < playerRect.right &&
+          itemRect.right > playerRect.left
+        ) {
+          item.remove();
+          clearInterval(fall);
+          
+          if (item.dataset.type === "good") {
+            score += 10;
+            scoreEl.textContent = score;
+          } else {
+            lives--;
+            livesEl.textContent = lives;
+            
+            if (lives <= 0) {
+              gameOver = true;
+              alert("💥 게임 오버! 점수: " + score);
+              location.reload();
+            }
+          }
+        }
+
+        if (itemY > 600) {
+          item.remove();
+          clearInterval(fall);
+        }
+      }, 20);
+    }
+
+    function startGame() {
+      // 플레이어 이동
+      setInterval(() => {
+        if (!gameOver) movePlayer();
+      }, 16);
+
+      // 시간 & 점수 업데이트
+      setInterval(() => {
+        if (gameOver) return;
+        time++;
+        timeEl.textContent = time;
+      }, 1000);
+
+      // 영양소 생성
+      setInterval(() => {
+        if (!gameOver) createNutritionItem();
+      }, 1500);
+    }
+  </script>
+</body>
+</html>
